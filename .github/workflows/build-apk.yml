@@ -137,8 +137,12 @@ jobs:
         
         echo "✅ ウェブアセット準備完了"
 
-    - name: Sync Capacitor Project
+    - name: Initialize and Sync Capacitor Project
       run: |
+        echo "🔧 Capacitorプラットフォーム追加開始"
+        npx cap add android
+        echo "✅ Androidプラットフォーム追加完了"
+        
         echo "🔄 Capacitor同期開始"
         npx cap sync android
         echo "✅ Capacitor同期完了"
