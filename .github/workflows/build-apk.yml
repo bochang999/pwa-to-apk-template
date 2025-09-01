@@ -1,4 +1,4 @@
-name: Build PWA Template APK
+name: Build PWA APK
 
 on:
   push:
@@ -8,14 +8,15 @@ on:
   workflow_dispatch:
 
 env:
-  JAVA_VERSION: '17'
-  NODE_VERSION: '18'
+  JAVA_VERSION: '21'
+  NODE_VERSION: '20'
   
 jobs:
   build:
     runs-on: ubuntu-latest
     
     steps:
+    # ========== 1. 環境セットアップフェーズ ==========
     - name: Checkout Repository
       uses: actions/checkout@v4
       with:
@@ -43,11 +44,24 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-gradle-
 
+    # ========== 2. 依存関係インストールフェーズ ==========
     - name: Install Dependencies
       run: |
+        echo "📦 依存関係インストール開始"
         npm ci
         npm install -g @capacitor/cli
+        # CI環境でのみ@capacitor/assetsをインストール (Sharp依存関係がCI環境で利用可能)
+        npm install @capacitor/assets@^3.0.5
+        echo "✅ 依存関係インストール完了"
 
+    - name: Run Lint and Format Check
+      env:
+        ESLINT_USE_FLAT_CONFIG: "false"
+      run: |
+        npm run lint
+        npm run format -- --check
+
+    # ========== 3. ウェブアセット構築フェーズ ==========
     - name: Validate PWA Assets
       run: |
         echo "🔍 PWA設定ファイル確認"
@@ -74,6 +88,7 @@ jobs:
 
     - name: Update App Version
       run: |
+        echo "📝 アプリバージョン更新開始"
         # package.jsonのバージョン更新
         jq --arg version "${{ env.VERSION_TAG }}" '.version = $version' package.json > package.json.tmp
         mv package.json.tmp package.json
@@ -82,42 +97,30 @@ jobs:
         jq --arg version "${{ env.VERSION_TAG }}" '.version = $version' manifest.json > manifest.json.tmp
         mv manifest.json.tmp manifest.json
         
-        echo "📝 バージョン ${{ env.VERSION_TAG }} に更新完了"
-
-    - name: Initialize Capacitor Project
-      run: |
-        echo "🔧 Capacitor初期化開始"
-        
-        # プロジェクト初期化（既存設定を使用）
-        npx cap init --web-dir ./ || echo "既に初期化済み"
-        
-        # Androidプラットフォーム追加
-        npx cap add android || echo "Android既に追加済み"
-        
-        echo "✅ Capacitor初期化完了"
+        echo "✅ バージョン ${{ env.VERSION_TAG }} に更新完了"
 
     - name: Setup Keystore from GitHub Secrets
       run: |
         echo "🔑 キーストア設定開始"
         
-        if [ -z "${{ secrets.KEYSTORE_B64 }}" ]; then
-          echo "⚠️ GitHub Secrets未設定 - テンプレート用キーストア生成"
+        if [ -z "${{ secrets.KEYSTORE_FILE }}" ]; then
+          echo "⚠️ GitHub Secrets未設定 - PWAテンプレート固定キーストア生成"
           keytool -genkeypair -v \
             -keystore template-release.keystore \
-            -alias template-key \
+            -alias pwa-template-key \
             -keyalg RSA \
             -keysize 2048 \
             -validity 10000 \
-            -dname "CN=PWA Template,OU=Template,O=Development,L=Tokyo,ST=Tokyo,C=JP" \
-            -storepass template123 \
-            -keypass template123
+            -dname "CN=PWA Template,OU=PWA Template,O=PWA Template App,L=Tokyo,ST=Tokyo,C=JP" \
+            -storepass template2024 \
+            -keypass template2024
           
-          echo "KEYSTORE_PASSWORD=template123" >> $GITHUB_ENV
-          echo "KEY_ALIAS=template-key" >> $GITHUB_ENV
-          echo "KEY_PASSWORD=template123" >> $GITHUB_ENV
+          echo "KEYSTORE_PASSWORD=template2024" >> $GITHUB_ENV
+          echo "KEY_ALIAS=pwa-template-key" >> $GITHUB_ENV
+          echo "KEY_PASSWORD=template2024" >> $GITHUB_ENV
         else
           echo "✅ GitHub Secrets設定済み - 本番キーストア使用"
-          echo "${{ secrets.KEYSTORE_B64 }}" | base64 --decode > template-release.keystore
+          echo "${{ secrets.KEYSTORE_FILE }}" | base64 --decode > template-release.keystore
           
           echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
           echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
@@ -126,15 +129,46 @@ jobs:
         
         echo "🔐 キーストア設定完了"
 
-    - name: Sync Capacitor
+    # ========== 4. Capacitor初期化フェーズ ==========
+    - name: Build Web Assets and Prepare Capacitor
+      run: |
+        echo "🏧️ ウェブアセットビルド開始"
+        
+        # distディレクトリ作成とファイルコピー
+        mkdir -p dist
+        cp index.html style.css script.js manifest.json sw.js config.js dist/
+        
+        echo "✅ ウェブアセット準備完了"
+
+    - name: Initialize and Sync Capacitor Project
       run: |
         echo "🔄 Capacitor同期開始"
         npx cap sync android
         echo "✅ Capacitor同期完了"
 
+    - name: Generate App Icons and Splash Screens (Capacitor Assets)
+      run: |
+        echo "🎨 Androidアダプティブアイコン生成開始 (Capacitor公式ツール)"
+        
+        # Capacitor公式アセットツールでアダプティブアイコン生成
+        npx @capacitor/assets generate --android
+        
+        # 生成結果確認
+        echo "✅ アダプティブアイコン生成完了! 生成ファイル:"
+        find android/app/src/main/res -name "*ic_launcher*" -o -name "*adaptive*" | sort
+        
+        # アダプティブアイコン仕様確認
+        if [ -d "android/app/src/main/res/mipmap-anydpi-v26" ]; then
+          echo "✅ Android 8.0+ アダプティブアイコン対応完了"
+          ls -la android/app/src/main/res/mipmap-anydpi-v26/
+        else
+          echo "⚠️ アダプティブアイコンディレクトリが生成されていません"
+        fi
+
+    # ========== 5. Android APKビルドフェーズ ==========
     - name: Build Android APK
       run: |
-        echo "🏗️ Android APK ビルド開始"
+        echo "🏧️ Android APK ビルド開始"
         cd android
         
         # Gradleラッパーに実行権限付与
@@ -145,33 +179,36 @@ jobs:
         
         echo "✅ APK ビルド完了"
 
-    - name: Sign APK
+    - name: Sign APK with apksigner
+      id: sign_apk
       run: |
-        echo "✍️ APK署名開始"
+        echo "✍️ APK署名開始 (Modern apksigner)"
         
         cd android/app/build/outputs/apk/release
         
-        # APK署名
-        jarsigner -verbose \
-          -keystore ../../../../../template-release.keystore \
-          -storepass ${{ env.KEYSTORE_PASSWORD }} \
-          -keypass ${{ env.KEY_PASSWORD }} \
-          -signedjar app-release-signed.apk \
-          app-release-unsigned.apk \
-          ${{ env.KEY_ALIAS }}
+        # 最新のAndroid build-toolsのパスを取得
+        BUILD_TOOLS_PATH=$(ls -d $ANDROID_HOME/build-tools/* | sort -r | head -n 1)
+        echo "🔧 使用build-tools: $BUILD_TOOLS_PATH"
         
-        # zipalign実行
-        $ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools | tail -1)/zipalign -v 4 \
-          app-release-signed.apk \
-          pwatemplate_${{ env.VERSION_TAG }}.apk
+        # APK署名 (signature scheme v2対応)
+        $BUILD_TOOLS_PATH/apksigner sign \
+          --ks ../../../../../../template-release.keystore \
+          --ks-key-alias ${{ env.KEY_ALIAS }} \
+          --ks-pass env:KEYSTORE_PASSWORD \
+          --key-pass env:KEY_PASSWORD \
+          --out pwa-app_${{ env.VERSION_TAG }}.apk \
+          app-release-unsigned.apk
         
-        echo "🎯 署名完了: pwatemplate_${{ env.VERSION_TAG }}.apk"
+        # 署名検証
+        $BUILD_TOOLS_PATH/apksigner verify pwa-app_${{ env.VERSION_TAG }}.apk
+        
+        echo "🎯 署名完了 (v2対応): pwa-app_${{ env.VERSION_TAG }}.apk"
 
     - name: Verify APK
       run: |
         echo "🔍 APK検証開始"
         
-        APK_PATH="android/app/build/outputs/apk/release/pwatemplate_${{ env.VERSION_TAG }}.apk"
+        APK_PATH="android/app/build/outputs/apk/release/pwa-app_${{ env.VERSION_TAG }}.apk"
         
         if [ -f "$APK_PATH" ]; then
           APK_SIZE=$(du -h "$APK_PATH" | cut -f1)
@@ -187,8 +224,8 @@ jobs:
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: PWA-Template-APK-${{ env.VERSION_TAG }}
-        path: android/app/build/outputs/apk/release/pwatemplate_${{ env.VERSION_TAG }}.apk
+        name: PWA-APP-APK-${{ env.VERSION_TAG }}
+        path: android/app/build/outputs/apk/release/pwa-app_${{ env.VERSION_TAG }}.apk
         retention-days: 30
 
     - name: Create Release (on main branch)
@@ -198,36 +235,35 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: v${{ env.VERSION_TAG }}
-        release_name: PWA Template v${{ env.VERSION_TAG }}
+        release_name: PWA App v${{ env.VERSION_TAG }}
         body: |
-          ## 📱 PWA Template APK v${{ env.VERSION_TAG }}
+          ## 📱 PWA App APK v${{ env.VERSION_TAG }}
           
-          ### ✨ テンプレート機能
-          - 📱 PWA→APK変換テンプレート
-          - 🎨 レスポンシブUI設計
-          - 💾 LocalStorage自動保存
-          - ⚙️ 設定システム完備
-          - 🔄 Service Worker対応
+          ### ✨ アプリ機能
+          - 📱 PWA (Progressive Web App) 対応
+          - 💾 オフライン動作
+          - 🔄 自動更新機能
+          - 📱 ネイティブアプリ風UI/UX
+          - 🚀 高速起動
           
           ### 🛠️ 開発環境
           - Node.js ${{ env.NODE_VERSION }}
           - Java JDK ${{ env.JAVA_VERSION }}
-          - Capacitor 5.x
+          - Capacitor 7.x
           - GitHub Actions自動ビルド
           
           ### 📋 使用方法
-          1. このテンプレートをフォーク/クローン
-          2. `npm install` で依存関係インストール
-          3. `npm run dev` で開発開始
-          4. GitHubにプッシュで自動APK生成
+          1. APKをダウンロード
+          2. Android端末にインストール
+          3. PWAアプリを利用開始
           
-          **APKファイル**: PWA-Template-APK-${{ env.VERSION_TAG }}
+          **APKファイル**: PWA-APP-APK-${{ env.VERSION_TAG }}
         draft: false
         prerelease: false
 
     - name: Build Summary
       run: |
-        echo "## 🎯 PWA Template APK Build Summary" >> $GITHUB_STEP_SUMMARY
+        echo "## 🎯 PWA App APK Build Summary" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "| 項目 | 値 |" >> $GITHUB_STEP_SUMMARY
         echo "|------|-----|" >> $GITHUB_STEP_SUMMARY
@@ -238,7 +274,13 @@ jobs:
         echo "| コミット | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 📦 成果物" >> $GITHUB_STEP_SUMMARY
-        echo "- APKファイル: \`pwatemplate_${{ env.VERSION_TAG }}.apk\`" >> $GITHUB_STEP_SUMMARY
-        echo "- アーティファクト: PWA-Template-APK-${{ env.VERSION_TAG }}" >> $GITHUB_STEP_SUMMARY
+        echo "- APKファイル: \`pwa-app_${{ env.VERSION_TAG }}.apk\`" >> $GITHUB_STEP_SUMMARY
+        echo "- アーティファクト: PWA-APP-APK-${{ env.VERSION_TAG }}" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "🚀 **APKビルドが正常に完了しました！**" >> $GITHUB_STEP_SUMMARY
+        echo "🚀 **PWA App APKビルドが正常に完了しました！**" >> $GITHUB_STEP_SUMMARY
+
+    - name: SonarCloud Scan
+      uses: SonarSource/sonarcloud-github-action@master
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
