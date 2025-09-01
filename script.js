@@ -1,394 +1,206 @@
-// ===== PWA→APK Template JavaScript =====
+// ===== Petit Recipe JavaScript =====
 
-// アプリケーションメインクラス
-class PWATemplate {
+// メインアプリケーションクラス
+class PetitRecipe {
     constructor() {
-        this.counter = 0;
-        this.settings = {
-            appName: 'PWA Template',
-            theme: 'default',
-            autoSave: true
-        };
+        this.recipes = [];
+        this.currentView = 'list';
+        this.currentRecipeId = null;
         this.init();
     }
 
     // 初期化
-    init() {
-        console.log('🚀 PWA Template 初期化開始');
+    async init() {
+        console.log('🍳 Petit Recipe 初期化開始');
         
-        // 時刻表示の開始
-        this.updateCurrentTime();
-        setInterval(() => this.updateCurrentTime(), 1000);
+        // レシピデータの読み込み
+        await this.loadRecipes();
         
-        // 保存されたデータの読み込み
-        this.loadSettings();
-        this.loadCounter();
+        // 初期画面の表示
+        this.showRecipeList();
         
-        // UI更新
-        this.updateUI();
-        
-        // PWA機能の初期化
-        this.initPWA();
-        
-        console.log('✅ PWA Template 初期化完了');
-    }
-
-    // 現在時刻の更新
-    updateCurrentTime() {
-        const now = new Date();
-        const timeString = now.toLocaleTimeString('ja-JP', {
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
+        // URL変更の監視（簡易ルーティング）
+        window.addEventListener('popstate', (event) => {
+            this.handleRoute();
         });
-        const element = document.getElementById('currentTime');
-        if (element) {
-            element.textContent = timeString;
-        }
-    }
-
-    // ===== カウンター機能 =====
-    
-    incrementCounter() {
-        this.counter++;
-        this.updateCounterDisplay();
-        if (this.settings.autoSave) {
-            this.saveCounter();
-        }
-        this.showNotification('カウンター +1', 'success');
-    }
-
-    decrementCounter() {
-        this.counter--;
-        this.updateCounterDisplay();
-        if (this.settings.autoSave) {
-            this.saveCounter();
-        }
-        this.showNotification('カウンター -1', 'info');
-    }
-
-    resetCounter() {
-        this.counter = 0;
-        this.updateCounterDisplay();
-        if (this.settings.autoSave) {
-            this.saveCounter();
-        }
-        this.showNotification('カウンターリセット', 'warning');
-    }
-
-    updateCounterDisplay() {
-        const element = document.getElementById('counterValue');
-        if (element) {
-            element.textContent = this.counter;
-            element.classList.add('fade-in');
-            setTimeout(() => element.classList.remove('fade-in'), 300);
-        }
-    }
-
-    // ===== データ管理 =====
-    
-    saveData() {
-        try {
-            const data = {
-                counter: this.counter,
-                timestamp: new Date().toISOString(),
-                settings: this.settings
-            };
-            localStorage.setItem('pwa-template-data', JSON.stringify(data));
-            this.updateDataStatus('データ保存完了');
-            this.showNotification('データを保存しました', 'success');
-        } catch (error) {
-            console.error('データ保存エラー:', error);
-            this.showNotification('データ保存に失敗しました', 'danger');
-        }
-    }
-
-    loadData() {
-        try {
-            const savedData = localStorage.getItem('pwa-template-data');
-            if (savedData) {
-                const data = JSON.parse(savedData);
-                this.counter = data.counter || 0;
-                this.settings = { ...this.settings, ...data.settings };
-                this.updateUI();
-                this.updateDataStatus(`データ読み込み完了 (${new Date(data.timestamp).toLocaleString()})`);
-                this.showNotification('データを読み込みました', 'success');
-            } else {
-                this.updateDataStatus('保存されたデータがありません');
-                this.showNotification('データが見つかりません', 'warning');
-            }
-        } catch (error) {
-            console.error('データ読み込みエラー:', error);
-            this.showNotification('データ読み込みに失敗しました', 'danger');
-        }
-    }
-
-    clearData() {
-        if (confirm('すべてのデータを削除しますか？')) {
-            localStorage.removeItem('pwa-template-data');
-            this.counter = 0;
-            this.settings = {
-                appName: 'PWA Template',
-                theme: 'default',
-                autoSave: true
-            };
-            this.updateUI();
-            this.updateDataStatus('データクリア完了');
-            this.showNotification('データを削除しました', 'info');
-        }
-    }
-
-    updateDataStatus(message) {
-        const element = document.getElementById('dataStatus');
-        if (element) {
-            element.textContent = message;
-            element.classList.add('fade-in');
-            setTimeout(() => element.classList.remove('fade-in'), 300);
-        }
-    }
-
-    // ===== 設定管理 =====
-    
-    showSettings() {
-        const modal = document.getElementById('settingsModal');
-        if (modal) {
-            // 現在の設定値をフォームに反映
-            document.getElementById('settingAppName').value = this.settings.appName;
-            document.getElementById('settingTheme').value = this.settings.theme;
-            document.getElementById('settingAutoSave').checked = this.settings.autoSave;
-            
-            modal.classList.add('active');
-        }
-    }
-
-    hideSettings() {
-        const modal = document.getElementById('settingsModal');
-        if (modal) {
-            modal.classList.remove('active');
-        }
-    }
-
-    saveSettings() {
-        // フォームから値を取得
-        this.settings.appName = document.getElementById('settingAppName').value;
-        this.settings.theme = document.getElementById('settingTheme').value;
-        this.settings.autoSave = document.getElementById('settingAutoSave').checked;
         
-        // LocalStorageに保存
-        localStorage.setItem('pwa-template-settings', JSON.stringify(this.settings));
+        // 初期ルーティング
+        this.handleRoute();
         
-        // UI更新
-        this.updateUI();
-        this.hideSettings();
-        this.showNotification('設定を保存しました', 'success');
+        console.log('✅ Petit Recipe 初期化完了');
     }
 
-    resetSettings() {
-        if (confirm('設定をデフォルトに戻しますか？')) {
-            this.settings = {
-                appName: 'PWA Template',
-                theme: 'default',
-                autoSave: true
-            };
-            localStorage.removeItem('pwa-template-settings');
-            this.updateUI();
-            this.hideSettings();
-            this.showNotification('設定をリセットしました', 'info');
-        }
-    }
-
-    loadSettings() {
+    // レシピデータの読み込み
+    async loadRecipes() {
         try {
-            const savedSettings = localStorage.getItem('pwa-template-settings');
-            if (savedSettings) {
-                this.settings = { ...this.settings, ...JSON.parse(savedSettings) };
-            }
+            const response = await fetch('src/data/recipes.json');
+            this.recipes = await response.json();
+            console.log('📖 レシピデータ読み込み完了:', this.recipes.length + '件');
         } catch (error) {
-            console.error('設定読み込みエラー:', error);
+            console.error('❌ レシピデータ読み込み失敗:', error);
+            // フォールバック用のダミーデータ
+            this.recipes = [
+                {
+                    id: "1",
+                    title: "サンプルレシピ",
+                    servings: "2人前",
+                    ingredients: ["材料1", "材料2"],
+                    instructions: ["手順1", "手順2"],
+                    cookTime: "30分",
+                    difficulty: "初級"
+                }
+            ];
         }
     }
 
-    // ===== カウンター保存/読み込み =====
-    
-    saveCounter() {
-        try {
-            localStorage.setItem('pwa-template-counter', this.counter.toString());
-        } catch (error) {
-            console.error('カウンター保存エラー:', error);
-        }
-    }
-
-    loadCounter() {
-        try {
-            const savedCounter = localStorage.getItem('pwa-template-counter');
-            if (savedCounter) {
-                this.counter = parseInt(savedCounter, 10) || 0;
-            }
-        } catch (error) {
-            console.error('カウンター読み込みエラー:', error);
-        }
-    }
-
-    // ===== UI更新 =====
-    
-    updateUI() {
-        // カウンター表示更新
-        this.updateCounterDisplay();
+    // 簡易ルーティング処理
+    handleRoute() {
+        const path = window.location.hash.slice(1) || '/';
         
-        // アプリ名更新
-        document.title = this.settings.appName;
-        const headerTitle = document.querySelector('.header-title h1');
-        if (headerTitle) {
-            headerTitle.innerHTML = `🚀 ${this.settings.appName}`;
+        if (path === '/' || path === '') {
+            this.showRecipeList();
+        } else if (path.startsWith('/recipe/')) {
+            const recipeId = path.split('/recipe/')[1];
+            this.showRecipeDetail(recipeId);
+        } else {
+            this.showRecipeList();
+        }
+    }
+
+    // レシピ一覧画面の表示
+    showRecipeList() {
+        console.log('📋 レシピ一覧表示');
+        
+        this.currentView = 'list';
+        this.currentRecipeId = null;
+        
+        // ビューの切り替え
+        document.getElementById('recipe-list-view').classList.add('active');
+        document.getElementById('recipe-detail-view').classList.remove('active');
+        
+        // ヘッダーの更新
+        document.getElementById('app-title').textContent = '🍳 Petit Recipe';
+        document.getElementById('backBtn').style.display = 'none';
+        
+        // レシピ一覧のレンダリング
+        this.renderRecipeList();
+        
+        // URL更新
+        window.history.replaceState({}, '', '#/');
+    }
+
+    // レシピ詳細画面の表示
+    showRecipeDetail(recipeId) {
+        console.log('📖 レシピ詳細表示:', recipeId);
+        
+        const recipe = this.recipes.find(r => r.id === recipeId);
+        if (!recipe) {
+            console.error('❌ レシピが見つかりません:', recipeId);
+            this.showRecipeList();
+            return;
         }
         
-        // テーマ適用
-        this.applyTheme();
-    }
-
-    applyTheme() {
-        document.body.className = '';
-        if (this.settings.theme === 'dark') {
-            document.body.classList.add('theme-dark');
-        } else if (this.settings.theme === 'light') {
-            document.body.classList.add('theme-light');
-        }
-    }
-
-    // ===== 通知システム =====
-    
-    showNotification(message, type = 'info') {
-        // 既存の通知を削除
-        const existingNotification = document.querySelector('.notification');
-        if (existingNotification) {
-            existingNotification.remove();
-        }
+        this.currentView = 'detail';
+        this.currentRecipeId = recipeId;
         
-        // 通知要素を作成
-        const notification = document.createElement('div');
-        notification.className = `notification notification-${type}`;
-        notification.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 12px 20px;
-            background: ${this.getNotificationColor(type)};
-            color: white;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-            z-index: 3000;
-            font-weight: 500;
-            transform: translateX(100%);
-            transition: transform 0.3s ease;
+        // ビューの切り替え
+        document.getElementById('recipe-list-view').classList.remove('active');
+        document.getElementById('recipe-detail-view').classList.add('active');
+        
+        // ヘッダーの更新
+        document.getElementById('app-title').textContent = recipe.title;
+        document.getElementById('backBtn').style.display = 'block';
+        
+        // レシピ詳細のレンダリング
+        this.renderRecipeDetail(recipe);
+        
+        // URL更新
+        window.history.pushState({}, '', `#/recipe/${recipeId}`);
+    }
+
+    // レシピ一覧のレンダリング
+    renderRecipeList() {
+        const container = document.getElementById('recipes-container');
+        container.innerHTML = '';
+
+        this.recipes.forEach(recipe => {
+            const recipeCard = document.createElement('div');
+            recipeCard.className = 'recipe-card card';
+            recipeCard.innerHTML = `
+                <div class="recipe-header">
+                    <h3 class="recipe-title">${recipe.title}</h3>
+                    <span class="recipe-difficulty ${recipe.difficulty}">${recipe.difficulty}</span>
+                </div>
+                <div class="recipe-meta">
+                    <span class="recipe-servings">👥 ${recipe.servings}</span>
+                    <span class="recipe-time">⏱️ ${recipe.cookTime}</span>
+                </div>
+                <div class="recipe-preview">
+                    <strong>材料:</strong> ${recipe.ingredients.slice(0, 3).join(', ')}${recipe.ingredients.length > 3 ? '...' : ''}
+                </div>
+                <button class="recipe-btn" onclick="petitRecipe.showRecipeDetail('${recipe.id}')">
+                    詳細を見る →
+                </button>
+            `;
+            container.appendChild(recipeCard);
+        });
+    }
+
+    // レシピ詳細のレンダリング
+    renderRecipeDetail(recipe) {
+        const container = document.getElementById('recipe-detail-content');
+        
+        const ingredientsList = recipe.ingredients.map(ingredient => 
+            `<li class="ingredient-item">${ingredient}</li>`
+        ).join('');
+        
+        const instructionsList = recipe.instructions.map((instruction, index) => 
+            `<li class="instruction-item">
+                <span class="step-number">${index + 1}</span>
+                <span class="step-content">${instruction}</span>
+            </li>`
+        ).join('');
+
+        container.innerHTML = `
+            <div class="recipe-detail-card card">
+                <div class="recipe-detail-header">
+                    <h2 class="recipe-detail-title">${recipe.title}</h2>
+                    <div class="recipe-detail-meta">
+                        <span class="recipe-servings">👥 ${recipe.servings}</span>
+                        <span class="recipe-time">⏱️ ${recipe.cookTime}</span>
+                        <span class="recipe-difficulty ${recipe.difficulty}">${recipe.difficulty}</span>
+                    </div>
+                </div>
+                
+                <div class="recipe-section">
+                    <h3 class="section-title">🛒 材料</h3>
+                    <ul class="ingredients-list">
+                        ${ingredientsList}
+                    </ul>
+                </div>
+                
+                <div class="recipe-section">
+                    <h3 class="section-title">📝 作り方</h3>
+                    <ol class="instructions-list">
+                        ${instructionsList}
+                    </ol>
+                </div>
+            </div>
         `;
-        notification.textContent = message;
-        
-        document.body.appendChild(notification);
-        
-        // アニメーション
-        setTimeout(() => {
-            notification.style.transform = 'translateX(0)';
-        }, 10);
-        
-        // 自動削除
-        setTimeout(() => {
-            notification.style.transform = 'translateX(100%)';
-            setTimeout(() => notification.remove(), 300);
-        }, 3000);
     }
 
-    getNotificationColor(type) {
-        const colors = {
-            success: '#27AE60',
-            warning: '#F39C12',
-            danger: '#E74C3C',
-            info: '#3498DB'
-        };
-        return colors[type] || colors.info;
-    }
-
-    // ===== PWA機能 =====
-    
-    initPWA() {
-        // インストールプロンプト
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            this.deferredPrompt = e;
-            this.showInstallButton();
-        });
-        
-        // オフライン/オンライン状態監視
-        window.addEventListener('online', () => {
-            this.showNotification('オンラインに戻りました', 'success');
-        });
-        
-        window.addEventListener('offline', () => {
-            this.showNotification('オフライン状態です', 'warning');
-        });
-        
-        // Service Worker更新通知
-        navigator.serviceWorker?.addEventListener('controllerchange', () => {
-            this.showNotification('アプリが更新されました', 'info');
-        });
-    }
-
-    showInstallButton() {
-        // インストールボタンを表示（実装例）
-        console.log('📱 PWAインストール可能');
-    }
-
-    // ===== ユーティリティ関数 =====
-    
-    // モーダルの外側クリックで閉じる
-    setupModalClickHandlers() {
-        const modals = document.querySelectorAll('.modal');
-        modals.forEach(modal => {
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) {
-                    modal.classList.remove('active');
-                }
-            });
-        });
-    }
-
-    // ESCキーでモーダルを閉じる
-    setupKeyboardHandlers() {
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                const activeModal = document.querySelector('.modal.active');
-                if (activeModal) {
-                    activeModal.classList.remove('active');
-                }
-            }
-        });
-    }
-
-    // フォーカス管理
-    setupAccessibility() {
-        // フォーカストラップなどのアクセシビリティ機能
-        console.log('♿ アクセシビリティ機能初期化');
+    // 戻るボタンの処理
+    goBack() {
+        if (this.currentView === 'detail') {
+            this.showRecipeList();
+        }
     }
 }
 
-// アプリケーションインスタンスを作成
-const app = new PWATemplate();
+// グローバルインスタンス
+let petitRecipe;
 
-// DOMContentLoaded後に追加設定
-document.addEventListener('DOMContentLoaded', () => {
-    app.setupModalClickHandlers();
-    app.setupKeyboardHandlers();
-    app.setupAccessibility();
-    
-    console.log('🎯 PWA Template 完全起動完了');
+// DOMコンテンツ読み込み完了後に初期化
+document.addEventListener('DOMContentLoaded', function() {
+    petitRecipe = new PetitRecipe();
 });
-
-// エクスポート（モジュール使用時）
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = PWATemplate;
-}
-
-// Capacitor対応の初期化
-document.addEventListener('deviceready', () => {
-    console.log('📱 Capacitor初期化完了');
-    app.showNotification('APKモードで実行中', 'success');
-}, false);

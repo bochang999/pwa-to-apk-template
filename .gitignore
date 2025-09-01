@@ -241,4 +241,4 @@ secrets.json
 
 # Deployment scripts
 deploy/
-.deployment/
+.deployment/pwa-to-apk-template/

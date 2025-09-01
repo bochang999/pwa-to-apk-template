@@ -1,7 +1,7 @@
 {
-  "name": "pwa-to-apk-template",
+  "name": "petit-recipe",
   "version": "1.0.0",
-  "description": "PWA→APK変換開発テンプレート - 最速開発スターター",
+  "description": "シンプルで使いやすいデジタルレシピ帳アプリ",
   "main": "index.html",
   "scripts": {
     "dev": "http-server -p 8080 -c-1",
@@ -21,7 +21,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/YOUR_USERNAME/pwa-to-apk-template.git"
+    "url": "https://github.com/bochang999/petit-recipe.git"
   },
   "keywords": [
     "pwa",
