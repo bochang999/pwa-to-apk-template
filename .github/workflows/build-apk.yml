@@ -56,7 +56,7 @@ jobs:
 
     - name: Run Lint and Format Check
       env:
-        ESLINT_USE_FLAT_CONFIG: "false"
+        ESLINT_USE_FLAT_CONFIG: true
       run: |
         npm run lint
         npm run format -- --check
@@ -103,7 +103,7 @@ jobs:
       run: |
         echo "🔑 キーストア設定開始"
         
-        if [ -z "${{ secrets.KEYSTORE_FILE }}" ]; then
+        if [ -z "${{ secrets.KEYSTORE_BASE64 }}" ]; then
           echo "⚠️ GitHub Secrets未設定 - PWAテンプレート固定キーストア生成"
           keytool -genkeypair -v \
             -keystore template-release.keystore \
@@ -120,7 +120,7 @@ jobs:
           echo "KEY_PASSWORD=template2024" >> $GITHUB_ENV
         else
           echo "✅ GitHub Secrets設定済み - 本番キーストア使用"
-          echo "${{ secrets.KEYSTORE_FILE }}" | base64 --decode > template-release.keystore
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > your-app-release-keystore.jks
           
           echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
           echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
@@ -181,8 +181,13 @@ jobs:
 
     - name: Sign APK with apksigner
       id: sign_apk
+      env:
+        KEYSTORE_PASSWORD: ${{ env.KEYSTORE_PASSWORD }}
+        KEY_ALIAS: ${{ env.KEY_ALIAS }}
+        KEY_PASSWORD: ${{ env.KEY_PASSWORD }}
+        VERSION_TAG: ${{ env.VERSION_TAG }}
       run: |
-        echo "✍️ APK署名開始 (Modern apksigner)"
+        echo "✍️ APK署名開始 (Modern apksigner with Dynamic Keystore Detection)"
         
         cd android/app/build/outputs/apk/release
         
@@ -190,19 +195,34 @@ jobs:
         BUILD_TOOLS_PATH=$(ls -d $ANDROID_HOME/build-tools/* | sort -r | head -n 1)
         echo "🔧 使用build-tools: $BUILD_TOOLS_PATH"
         
+        # 動的キーストアファイル検出システム（RecipeBox方式）
+        if [ -f "../../../../../../your-app-release-keystore.jks" ]; then
+          KEYSTORE_FILE="../../../../../../your-app-release-keystore.jks"
+          echo "🔑 本番キーストア使用: your-app-release-keystore.jks"
+        elif [ -f "../../../../../../template-release.keystore" ]; then
+          KEYSTORE_FILE="../../../../../../template-release.keystore"
+          echo "🔑 フォールバックキーストア使用: template-release.keystore"
+        else
+          echo "❌ キーストアファイルが見つかりません"
+          ls -la ../../../../../../*.keystore ../../../../../../*.jks 2>/dev/null || echo "キーストアファイルが存在しません"
+          exit 1
+        fi
+        
+        echo "🔑 使用キーストア: $KEYSTORE_FILE"
+        
         # APK署名 (signature scheme v2対応)
         $BUILD_TOOLS_PATH/apksigner sign \
-          --ks ../../../../../../template-release.keystore \
-          --ks-key-alias ${{ env.KEY_ALIAS }} \
+          --ks "$KEYSTORE_FILE" \
+          --ks-key-alias "$KEY_ALIAS" \
           --ks-pass env:KEYSTORE_PASSWORD \
           --key-pass env:KEY_PASSWORD \
-          --out pwa-app_${{ env.VERSION_TAG }}.apk \
+          --out pwa-app_$VERSION_TAG.apk \
           app-release-unsigned.apk
         
         # 署名検証
-        $BUILD_TOOLS_PATH/apksigner verify pwa-app_${{ env.VERSION_TAG }}.apk
+        $BUILD_TOOLS_PATH/apksigner verify pwa-app_$VERSION_TAG.apk
         
-        echo "🎯 署名完了 (v2対応): pwa-app_${{ env.VERSION_TAG }}.apk"
+        echo "🎯 署名完了 (v2対応): pwa-app_$VERSION_TAG.apk"
 
     - name: Verify APK
       run: |

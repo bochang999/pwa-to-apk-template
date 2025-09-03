@@ -190,11 +190,94 @@ class YourApp extends PWATemplate {
 const app = new YourApp();
 ```
 
+## 🔐 APK署名設定ガイド
+
+### Production APK署名の完全設定手順
+
+#### 1. Keystoreファイル作成
+```bash
+# 本番用Keystoreを作成（推奨設定）
+keytool -genkeypair -v \
+  -keystore your-app-release-keystore.jks \
+  -alias your-app-release-key \
+  -keyalg RSA \
+  -keysize 2048 \
+  -validity 10000 \
+  -dname "CN=Your App Name,OU=Your Organization,O=Your Company,L=City,ST=State,C=JP" \
+  -storepass your-keystore-password-2024 \
+  -keypass your-keystore-password-2024
+```
+
+#### 2. Base64エンコード
+```bash
+# KeystoreをBase64に変換（GitHub Secrets用）
+base64 -w 0 your-app-release-keystore.jks > keystore_base64.txt
+```
+
+#### 3. GitHub Secrets設定（必須4項目）
+Repository Settings > Secrets and variables > Actions:
+
+| Secret名 | 値 | 説明 |
+|----------|-----|------|
+| `KEYSTORE_BASE64` | Base64文字列 | 改行・スペースなしで完全コピー |
+| `KEYSTORE_PASSWORD` | your-keystore-password-2024 | Keystoreパスワード |
+| `KEY_ALIAS` | your-app-release-key | キーエイリアス名 |
+| `KEY_PASSWORD` | your-keystore-password-2024 | キーパスワード（通常はstorepassと同じ） |
+
+#### 4. 署名成功の確認ポイント
+
+✅ **正しい設定チェックリスト:**
+- [ ] Base64文字列に改行・スペースが入っていない
+- [ ] エイリアス名が`keytool -list`で確認した実際の名前と完全一致
+- [ ] パスワードに特殊文字が含まれていない
+- [ ] 4つのSecrets全てが設定済み
+
+⚠️ **よくある失敗パターン:**
+- GitHub SecretsのBase64データにコピー時の改行混入
+- キーエイリアス名の大文字小文字間違い
+- Keystoreパスワードとキーパスワードの混同
+- ワークフローファイルのkeystoreファイル名不一致
+
+#### 5. APK署名エラーの診断方法
+
+**エラーメッセージ別対処法:**
+
+| エラー | 原因 | 解決方法 |
+|--------|------|---------|
+| `keystore password was incorrect` | パスワード間違い | GitHub Secretsの`KEYSTORE_PASSWORD`確認 |
+| `does not contain a key` | エイリアス名間違い | `keytool -list`で正しい名前確認 |
+| `Given final block not properly padded` | Base64データ破損 | Base64再生成・改行除去 |
+| `java.io.EOFException` | Keystoreファイル破損 | 新規Keystore作成・Base64再生成 |
+
+#### 6. 動的Keystore検出システム（実装済み）
+
+テンプレートには以下の安全機能が実装済み:
+```yaml
+# GitHub Secretsの有無を自動判定
+if [ -f "../../../../../../your-app-release-keystore.jks" ]; then
+  KEYSTORE_FILE="../../../../../../your-app-release-keystore.jks"
+elif [ -f "../../../../../../template-release.keystore" ]; then
+  KEYSTORE_FILE="../../../../../../template-release.keystore"  # フォールバック
+else
+  echo "❌ キーストアファイルが見つかりません"
+  exit 1
+fi
+```
+
+#### 7. ESLint Flat Config対応（必須）
+
+GitHub Actions環境で必要な設定:
+```yaml
+env:
+  ESLINT_USE_FLAT_CONFIG: true  # 必須: eslint.config.js認識用
+```
+
 ## 📋 トラブルシューティング
 
 ### よくある問題
 
 #### APKビルドが失敗する
+- **APK署名エラー**: 上記「APK署名設定ガイド」を参照
 - GitHub Secretsの設定を確認
 - capacitor.config.tsのappIdが重複していないか確認
 - Java/Node.jsバージョンを確認
