@@ -45,6 +45,13 @@ jobs:
           ${{ runner.os }}-gradle-
 
     # ========== 2. 依存関係インストールフェーズ ==========
+    - name: Check lockfile sync
+      run: |
+        echo "🔍 package-lock.json 同期チェック開始"
+        npm install --package-lock-only
+        git diff --exit-code package-lock.json || (echo "❌ package-lock.json is out of sync. Run 'npm install' locally and commit the changes." && exit 1)
+        echo "✅ package-lock.json 同期確認完了"
+    
     - name: Install Dependencies
       id: install_deps
       continue-on-error: true
