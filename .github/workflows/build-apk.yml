@@ -80,6 +80,12 @@ jobs:
         fi
         exit 1
 
+    - name: Verify ESLint Installation
+      run: |
+        echo "🔍 ESLint インストール確認"
+        npx eslint --version
+        echo "✅ ESLint 正常確認完了"
+
     - name: Run Lint and Format Check
       env:
         ESLINT_USE_FLAT_CONFIG: true

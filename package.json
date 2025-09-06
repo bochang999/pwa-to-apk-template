@@ -20,7 +20,7 @@
     "icons:generate:ios": "npx @capacitor/assets generate --iconPath app-icon-master.png --platforms ios",
     "serve": "http-server -p 8080 -c-1 -o",
     "format": "prettier --write \"**/*.{ts,js}\"",
-    "lint": "eslint \"**/*.{ts,js}\" --fix"
+    "lint": "npx eslint \"**/*.{ts,js}\" --fix"
   },
   "repository": {
     "type": "git",
