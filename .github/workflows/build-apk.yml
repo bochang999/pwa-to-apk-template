@@ -52,12 +52,10 @@ jobs:
         echo "📦 依存関係インストール開始"
         npm ci > install.log 2>&1
         npm install -g @capacitor/cli >> install.log 2>&1
-        # CI環境でのみ@capacitor/assetsをインストール (Sharp依存関係がCI環境で利用可能)
-        npm install @capacitor/assets@^3.0.5 >> install.log 2>&1
         echo "✅ 依存関係インストール完了"
     
     - name: Upload Install Dependencies Log on Failure
-      if: ${{ failure() && steps.install_deps.outcome == 'failure' }}
+      if: ${{ steps.install_deps.conclusion == 'failure' }}
       uses: actions/upload-artifact@v4
       with:
         name: install-dependencies-error-log
@@ -65,10 +63,14 @@ jobs:
         retention-days: 7
     
     - name: Fail Workflow if Install Dependencies Failed
-      if: ${{ steps.install_deps.outcome == 'failure' }}
+      if: ${{ steps.install_deps.conclusion == 'failure' }}
       run: |
         echo "❌ 依存関係インストールが失敗しました。詳細はArtifactsのログを確認してください。"
-        cat install.log
+        if [ -f "install.log" ]; then
+          cat install.log
+        else
+          echo "⚠️ install.logファイルが見つかりません"
+        fi
         exit 1
 
     - name: Run Lint and Format Check
