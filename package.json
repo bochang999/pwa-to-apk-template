@@ -15,6 +15,9 @@
     "capacitor:run:android": "npx cap run android",
     "android:build": "npm run capacitor:sync && cd android && ./gradlew assembleRelease",
     "android:sign": "cd android/app/build/outputs/apk/release && jarsigner -verbose -keystore ../../../../../template.keystore -signedjar app-release-signed.apk app-release-unsigned.apk template-key",
+    "icons:generate": "npx @capacitor/assets generate --iconPath app-icon-master.png",
+    "icons:generate:android": "npx @capacitor/assets generate --iconPath app-icon-master.png --platforms android",
+    "icons:generate:ios": "npx @capacitor/assets generate --iconPath app-icon-master.png --platforms ios",
     "serve": "http-server -p 8080 -c-1 -o",
     "format": "prettier --write \"**/*.{ts,js}\"",
     "lint": "eslint \"**/*.{ts,js}\" --fix"
@@ -51,6 +54,7 @@
   },
   "devDependencies": {
     "@capacitor/android": "^7.0.0",
+    "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^7.0.0",
     "@capacitor/status-bar": "^7.0.0",
     "@typescript-eslint/eslint-plugin": "^8.41.0",
