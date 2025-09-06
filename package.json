@@ -2,6 +2,7 @@
   "name": "pwa-to-apk-template",
   "version": "1.0.0",
   "description": "PWA→APK変換開発テンプレート - 最速開発スターター",
+  "type": "module",
   "main": "index.html",
   "scripts": {
     "dev": "http-server -p 8080 -c-1",
@@ -62,6 +63,7 @@
     "eslint": "^9.34.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-import": "^2.32.0",
+    "globals": "^15.0.0",
     "http-server": "^14.0.0",
     "prettier": "^3.6.2",
     "typescript": "^5.9.2"
