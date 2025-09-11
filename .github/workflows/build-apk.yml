@@ -143,7 +143,30 @@ jobs:
     - name: Initialize and Sync Capacitor Project
       run: |
         echo "🔄 Capacitor同期開始"
+        
+        # 防御的プログラミング: Android platformが未追加の場合を検出・対応
+        if [ ! -d "android" ]; then
+          echo "⚠️ Androidプラットフォーム未検出 - 自動追加開始"
+          npx cap add android
+          if [ $? -ne 0 ]; then
+            echo "❌ Androidプラットフォーム追加失敗"
+            exit 1
+          fi
+          echo "✅ Androidプラットフォーム追加完了"
+        else
+          echo "✅ Androidプラットフォーム存在確認済み"
+        fi
+        
+        # プラットフォーム確認後、同期実行
+        echo "🔄 Capacitor Android同期実行"
         npx cap sync android
+        
+        # 同期結果検証
+        if [ $? -ne 0 ]; then
+          echo "❌ Capacitor同期失敗"
+          exit 1
+        fi
+        
         echo "✅ Capacitor同期完了"
 
     - name: Generate App Icons and Splash Screens (Capacitor Assets)
